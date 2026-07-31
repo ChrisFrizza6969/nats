@@ -147,7 +147,13 @@ final readonly class Store
             throw new \LogicException('Empty object provided.');
         }
 
-        $encodedDigest = self::base64encode($digest->finish());
+        // The digest MUST keep its base64url padding — do not route it through
+        // self::base64encode(), which rtrim()s '='. That helper is correct for
+        // SUBJECT names (unpadded is required there), but nats.go decodes the
+        // digest with base64.URLEncoding (padded), so an unpadded value makes
+        // every reader fail with "illegal base64 data at input byte 40" on the
+        // 43rd char of a 44-char SHA-256. See DecodeObjectDigest in nats.go.
+        $encodedDigest = strtr(base64_encode($digest->finish()), '+/', '-_');
         $subject = "\$O.{$this->name}.M." . self::base64encode($meta->name);
 
         $objectInfo = new ObjectInfo(
